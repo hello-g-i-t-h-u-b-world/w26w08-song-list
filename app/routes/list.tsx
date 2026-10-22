@@ -1,7 +1,7 @@
-import type { Route } from "./+types/list";
-import { useLoaderData } from 'react-router'
+import { useLoaderData, useNavigate, Link  } from 'react-router'
 import { supabase } from '../lib/supabase'
 import { useAuthStore } from "~/lib/auth-store";
+import type { Route } from "./+types/list";
 
 export function meta({}: Route.MetaArgs) {
   return [
@@ -23,7 +23,7 @@ export async function clientLoader() {
 
   if (!useAuthStore.getState().session) {
     console.log("로그인 세션 없음")
-    return { songs: [], user: null }
+    return { songs: [] }
   }
 
   //-------------------------------------------------------
@@ -35,10 +35,10 @@ export async function clientLoader() {
   
   if (songsError) {
     console.log("노래 데이터 불러오기 실패", songsError.message)
-    return { songs: [], user: useAuthStore.getState().user }
+    return { songs: [] }
   }
 
-  return { songs: data, user: useAuthStore.getState().user }
+  return { songs: data }
 }
 
 // 로딩 화면. HydrateFallback 이름 정해져 있음
@@ -52,22 +52,40 @@ export function ErrorBoundary() {
 }
 
 export default function List() {
-  const { songs, user } = useLoaderData<typeof clientLoader>()
+  const { songs } = useLoaderData<typeof clientLoader>()
+  const user = useAuthStore(s => s.user)
+  const navigate = useNavigate()
 
-    return (
+  return (
     <div>
-      <h2>애창곡 리스트 ({user?.email})</h2>
-      {songs.length === 0 ? (
-        <p>등록된 노래가 없거나 데이터를 불러오지 못했습니다.</p>
+      <h2>애창곡 리스트 {user && `(${user.email})`}</h2>
+      
+      {user ? (
+        <div>
+          <button 
+            onClick={ async () => {
+              await useAuthStore.getState().signOut()
+              // alert("로그아웃")
+              navigate('/')
+            }}>
+            로그아웃
+          </button>
+
+          {songs.length === 0 ? (
+            <p>등록된 노래가 없거나 데이터를 불러오지 못했습니다.</p>
+          ) : (
+            <ul>
+              {songs.map((song: any) => (
+                <li key={song.id}>
+                  <strong>{song.title}</strong> - {song.artist || '(가수 없음)'}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       ) : (
-        <ul>
-          {songs.map((song: any) => (
-            <li key={song.id}>
-              <strong>{song.title}</strong> - {song.artist || '(가수 없음)'}
-            </li>
-          ))}
-        </ul>
-      )}
+        <Link to="/login">로그인</Link>
+      )}     
     </div>
   )
 }
