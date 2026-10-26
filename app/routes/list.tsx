@@ -1,7 +1,8 @@
-import { useLoaderData, useNavigate  } from 'react-router'
+import { useLoaderData, useNavigate, Link  } from 'react-router'
 import { supabase } from '../lib/supabase'
 import { useAuthStore } from "~/lib/auth-store";
 import type { Route } from "./+types/list";
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 
 export function meta({}: Route.MetaArgs) {
   return [
@@ -20,25 +21,6 @@ export async function clientLoader() {
     const { data: { session } } = await supabase.auth.getSession()
     useAuthStore.getState().setSession(session)
   }
-
-  if (!useAuthStore.getState().session) {
-    console.log("로그인 세션 없음")
-    return { songs: [] }
-  }
-
-  //-------------------------------------------------------
-  // 노래 데이터 불러오기
-  //-------------------------------------------------------
-  const { data, error: songsError } = await supabase
-    .from('songs')
-    .select('*')
-  
-  if (songsError) {
-    console.log("노래 데이터 불러오기 실패", songsError.message)
-    return { songs: [] }
-  }
-
-  return { songs: data }
 }
 
 // 로딩 화면. HydrateFallback 이름 정해져 있음
@@ -52,20 +34,38 @@ export function ErrorBoundary() {
 }
 
 export default function List() {
-  const { songs } = useLoaderData<typeof clientLoader>()
   const user = useAuthStore(s => s.user)
+  const githubSignIn = useAuthStore(s => s.githubSignIn)
+  const queryClient = useQueryClient()
   const navigate = useNavigate()
+
+  const {data: songs = [], isPending, isError, error} = useQuery({
+    queryKey: ['songs'],
+    queryFn: async () => {
+      const {data, error} = await supabase.from('songs').select('*')
+      if(error) throw new Error(error.message)
+      return data
+    },
+    enabled: !!user,
+    staleTime: 1000*60*5
+  })
 
   return (
     <div>
       <h2>애창곡 리스트 {user && `(${user.email})`}</h2>
       
       {user ? (
-        <div>
+        isPending ? (
+          <p>노래 데이터 불러오는 중 ... </p>
+        ) : isError ? (
+          <p>에러 발생 : {error.message}</p>
+        ) : (
+          <div>
           <button 
             onClick={ async () => {
               await useAuthStore.getState().signOut()
               // alert("로그아웃")
+              queryClient.clear()
               navigate('/')
             }}>
             로그아웃
@@ -83,7 +83,8 @@ export default function List() {
             </ul>
           )}
         </div>
-      ) : (
+      )
+    ) : (
         <div>
           <button 
             onClick={() => navigate('/login')}>
