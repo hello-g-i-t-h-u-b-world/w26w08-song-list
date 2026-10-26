@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase'
 import { useAuthStore } from "~/lib/auth-store";
 import type { Route } from "./+types/list";
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query'
+import { useState } from 'react';
 
 export function meta({}: Route.MetaArgs) {
   return [
@@ -39,6 +40,11 @@ export default function List() {
   const queryClient = useQueryClient()
   const navigate = useNavigate()
 
+  const [title, setTitle] = useState("")
+  const [artist, setArtist] = useState("")
+  const [rating, setRating] = useState(5)
+  const [lyrics, setLyrics] = useState("")
+
   const {data: songs = [], isPending, isError, error} = useQuery({
     queryKey: ['songs'],
     queryFn: async () => {
@@ -63,6 +69,25 @@ export default function List() {
     }
   })
 
+  const addSongMutation = useMutation({
+    mutationFn: async () => {
+      const {data, error} = await supabase.from('songs').insert([{title, artist, rating, lyrics}])
+      if(error) throw new Error(error.message)
+      return data
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({queryKey: ['songs']})
+
+      setTitle("")
+      setArtist("")
+      setRating(5)
+      setLyrics("")
+    },
+    onError: (err: any) => {
+      alert(`노래 추가 실패 : ${err.message}`)
+    }
+  })
+
   return (
     <div>
       <h2>애창곡 리스트 {user && `(${user.email})`}</h2>
@@ -83,6 +108,39 @@ export default function List() {
             }}>
             로그아웃
           </button>
+
+          <form onSubmit={e => {
+            e.preventDefault()
+            addSongMutation.mutate()
+          }}>
+            <input
+              type = "text"
+              value={title}
+              placeholder='노래 제목 (*)'
+              onChange={e => setTitle(e.target.value)}
+              required/>
+            <input
+              type ="text"
+              value={artist}
+              placeholder='가수 (*)'
+              onChange={e => setArtist(e.target.value)}
+              required/>
+            <label>평점:</label>
+            <input
+              type="number"
+              min="1"
+              max="5"
+              value={rating}
+              onChange={e => setRating(parseInt(e.target.value))}
+              required/>
+            <textarea
+              value={lyrics}
+              placeholder='가사'
+              onChange={e => setLyrics(e.target.value)}/>
+            <button type = "submit" disabled={addSongMutation.isPending}>
+              노래 추가
+            </button>
+          </form>
 
           {songs.length === 0 ? (
             <p>등록된 노래가 없거나 데이터를 불러오지 못했습니다.</p>
