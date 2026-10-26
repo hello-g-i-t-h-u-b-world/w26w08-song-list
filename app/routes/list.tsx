@@ -2,7 +2,7 @@ import { useLoaderData, useNavigate, Link  } from 'react-router'
 import { supabase } from '../lib/supabase'
 import { useAuthStore } from "~/lib/auth-store";
 import type { Route } from "./+types/list";
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query'
 
 export function meta({}: Route.MetaArgs) {
   return [
@@ -50,6 +50,19 @@ export default function List() {
     staleTime: 1000*60*5
   })
 
+  const deleteSongMutation = useMutation({
+    mutationFn: async (songId: number) => {
+      const {error} = await supabase.from('songs').delete().eq('id', songId)
+      if(error) throw new Error(error.message)
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({queryKey: ['songs']})
+    },
+    onError: (err: any) => {
+      alert(`노래 삭제 실패: ${err.message}`)
+    }
+  })
+
   return (
     <div>
       <h2>애창곡 리스트 {user && `(${user.email})`}</h2>
@@ -78,6 +91,14 @@ export default function List() {
               {songs.map((song: any) => (
                 <li key={song.id}>
                   <strong>{song.title}</strong> - {song.artist || '(가수 없음)'}
+                  <button
+                    disabled={deleteSongMutation.isPending}
+                    onClick={() => {
+                      if(confirm(`'${song.title}' 노래를 삭제하시겠습니까?`)){
+                        deleteSongMutation.mutate(song.id)
+                      }
+                    }}>삭제
+                    </button>
                 </li>
               ))}
             </ul>
